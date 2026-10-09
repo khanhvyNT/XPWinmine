@@ -34,6 +34,19 @@ jobs:
           Write-Host "Using platform: $pick"
           "platform=$pick" >> $env:GITHUB_OUTPUT
 
+      - name: Force static runtime (/MT)
+        shell: pwsh
+        run: |
+          @'
+          <Project>
+            <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+              <ClCompile>
+                <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+              </ClCompile>
+            </ItemDefinitionGroup>
+          </Project>
+          '@ | Set-Content Directory.Build.targets
+
       - name: Build
         shell: pwsh
         run: >
@@ -42,6 +55,15 @@ jobs:
           /p:Platform=${{ steps.cfg.outputs.platform }}
           /p:WindowsTargetPlatformVersion=10.0
           /m
+
+      - name: Check dependencies
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Recurse -Filter *.exe | Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1
+          Write-Host "Exe: $($exe.FullName)"
+          $dumpbin = Get-ChildItem "C:\Program Files\Microsoft Visual Studio" -Recurse -Filter dumpbin.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match 'Hostx64\\x64' } | Select-Object -First 1
+          if ($dumpbin) { & $dumpbin.FullName /dependents $exe.FullName }
 
       - name: Upload exe
         uses: actions/upload-artifact@v4
